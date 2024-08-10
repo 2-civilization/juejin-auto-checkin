@@ -1,0 +1,20 @@
+{
+  "name": "juejin-auto-checkin",
+  "module": "index.ts",
+  "type": "module",
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "canvas": "^2.11.2",
+    "fs": "^0.0.1-security",
+    "jsqr": "^1.4.0",
+    "puppeteer": "^23.0.2",
+    "qrcode-generator": "^1.4.4",
+    "terminal-image": "^3.0.0",
+    "toml": "^3.0.0"
+  }
+}
