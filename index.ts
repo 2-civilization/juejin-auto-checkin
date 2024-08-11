@@ -71,7 +71,10 @@ const main = async () => {
         }
       });
 
-      await page.waitForNavigation({ waitUntil: "networkidle0" });
+      await page.waitForNavigation({
+        waitUntil: "networkidle0",
+        timeout: 1000 * 60 * 5,
+      });
     };
 
     if (!fs.existsSync(COOKIE_PATH)) {
