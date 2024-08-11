@@ -1,9 +1,11 @@
 import puppeteer, { type CookieParam } from "puppeteer";
 import fs from "fs";
-import type { UserCheckInStatus, UserMonthlyActivity } from "./types";
+import type {
+  PushPlusResponse,
+  UserCheckInStatus,
+  UserMonthlyActivity,
+} from "./types";
 import { CronJob } from "cron";
-
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const DIR_PATH = "./config";
 const COOKIE_PATH = DIR_PATH + "/cookies.json";
@@ -27,8 +29,10 @@ if (!PUSH_PLUS_TOKEN) {
 const pushMsg = async (msg: string) => {
   if (PUSH_PLUS_TOKEN) {
     const pushPlusUrl = `https://www.pushplus.plus/send?token=${PUSH_PLUS_TOKEN}&title=掘金签到提醒&content=${msg}`;
-    const data = await fetch(pushPlusUrl).then((res) => res.json());
-    console.log(data);
+    const data = (await fetch(pushPlusUrl).then((res) =>
+      res.json()
+    )) as PushPlusResponse;
+    console.log(data.code === 200 ? "推送成功" : "推送失败");
   }
 };
 
@@ -62,17 +66,12 @@ const main = async () => {
       const loginButton = await page.$(".login-button");
       await loginButton?.click();
       await page.waitForSelector(".qrcode-img");
-      await sleep(1000);
       const qrCodeImg = await page.$(".qrcode-img");
       if (!qrCodeImg) {
         throw new Error("未找到二维码图片");
       }
       await qrCodeImg.screenshot({
         path: QR_CODE_PATH,
-      });
-
-      page.screenshot({
-        path: "juejin.png",
       });
 
       console.log(`请扫描 ${QR_CODE_PATH} 中的二维码进行登录`);
@@ -101,10 +100,7 @@ const main = async () => {
     await page.waitForSelector(".signin");
 
     const checkinButton = await page.$(".code-calender");
-    await sleep(1000);
     await checkinButton?.click();
-
-    await sleep(1000);
 
     page.on("response", async (response) => {
       const url = response.url();
@@ -133,11 +129,13 @@ const main = async () => {
       }
     });
 
-    await page.reload();
-    await sleep(1000);
+    await page.reload({
+      waitUntil: "networkidle0",
+    });
 
     if (msg.includes("{point}")) {
-      await pushMsg("签到失败: 未获取到签到信息");
+      await pushMsg("未获取到矿石信息");
+      return;
     }
 
     await pushMsg(msg);
