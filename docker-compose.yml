@@ -2,6 +2,8 @@ services:
   juejin-auto-checkin:
     image: ghcr.io/lonzzi/juejin-auto-checkin:latest
     container_name: juejin-auto-checkin
+    volumes:
+      - ./config:/usr/src/app/config
     environment:
       - PUSH_PLUS_TOKEN=${PUSH_PLUS_TOKEN}
       - CRON=${CRON}
