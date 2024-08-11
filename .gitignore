@@ -174,5 +174,5 @@ dist
 # Finder (MacOS) folder config
 .DS_Store
 
-# screenshot
-./config/qrcode.png
+# config
+./config/*
