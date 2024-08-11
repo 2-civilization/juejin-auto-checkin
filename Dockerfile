@@ -11,10 +11,9 @@ RUN cd /temp/dev && bun install --frozen-lockfile
 # copy production dependencies and source code into final image
 FROM base AS release
 COPY --from=install /temp/dev/node_modules node_modules
-RUN bun puppeteer browsers install chrome
-COPY . .
 
 # run the app
 RUN apt-get update && \
-    apt-get install -y libasound2 libgtk-3-0 libnss3 libdrm2 libgbm1
+    apt-get install -y libasound2 libgtk-3-0 libnss3 libdrm2 libgbm1 chromium
+COPY . .
 ENTRYPOINT [ "bun", "run", "index.ts" ]

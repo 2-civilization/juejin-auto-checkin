@@ -1,6 +1,6 @@
 import puppeteer, { type CookieParam } from "puppeteer";
 import fs from "fs";
-import type { UserMonthlyActivity } from "./types";
+import type { UserCheckInStatus, UserMonthlyActivity } from "./types";
 import { CronJob } from "cron";
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -20,22 +20,30 @@ if (!fs.existsSync(DIR_PATH)) {
   fs.mkdirSync(DIR_PATH);
 }
 
+if (!PUSH_PLUS_TOKEN) {
+  console.log("未配置 PUSH_PLUS_TOKEN, 跳过推送");
+}
+
 const pushMsg = async (msg: string) => {
   if (PUSH_PLUS_TOKEN) {
     const pushPlusUrl = `https://www.pushplus.plus/send?token=${PUSH_PLUS_TOKEN}&title=掘金签到提醒&content=${msg}`;
     const data = await fetch(pushPlusUrl).then((res) => res.json());
     console.log(data);
-  } else {
-    console.log("未配置 PUSH_PLUS_TOKEN, 跳过推送");
   }
 };
 
 const main = async () => {
+  console.log("开始签到");
   try {
     const browser = await puppeteer.launch({
       args: ["--no-sandbox"],
+      executablePath: fs.existsSync("/usr/bin/chromium")
+        ? "/usr/bin/chromium"
+        : undefined,
     });
+
     const page = await browser.newPage();
+    page.setDefaultTimeout(1000 * 60 * 5);
 
     await page.setUserAgent(
       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36"
@@ -46,7 +54,9 @@ const main = async () => {
       height: 1080,
     });
 
-    await page.goto("https://juejin.cn/");
+    await page.goto("https://juejin.cn/", {
+      waitUntil: "networkidle0",
+    });
 
     const login = async () => {
       const loginButton = await page.$(".login-button");
@@ -61,6 +71,10 @@ const main = async () => {
         path: QR_CODE_PATH,
       });
 
+      page.screenshot({
+        path: "juejin.png",
+      });
+
       console.log(`请扫描 ${QR_CODE_PATH} 中的二维码进行登录`);
 
       page.on("framenavigated", async (frame) => {
@@ -71,10 +85,7 @@ const main = async () => {
         }
       });
 
-      await page.waitForNavigation({
-        waitUntil: "networkidle0",
-        timeout: 1000 * 60 * 5,
-      });
+      await page.waitForNavigation({ waitUntil: "networkidle0" });
     };
 
     if (!fs.existsSync(COOKIE_PATH)) {
@@ -88,7 +99,9 @@ const main = async () => {
     await page.goto("https://juejin.cn/user/center/signin?from=main_page");
 
     await page.waitForSelector(".signin");
-    const checkinButton = await page.$(".signin");
+
+    const checkinButton = await page.$(".code-calender");
+    await sleep(1000);
     await checkinButton?.click();
 
     await sleep(1000);
@@ -106,16 +119,26 @@ const main = async () => {
             new Date(new Date().setHours(0, 0, 0, 0)).getTime() / 1000
         );
         if (today) {
-          msg = msg
-            .replace("{checkin}", today.status === 4 ? "未签到" : "已签到")
-            .replace("{point}", today.point.toString());
-          console.log(msg);
+          msg = msg.replace("{point}", today.point.toString());
         }
+      }
+      if (
+        url.includes("get_today_status") &&
+        response.request().method() === "GET"
+      ) {
+        const data = (await response.json()) as UserCheckInStatus;
+        const checkin = data.data.check_in_done ? "已签到" : "未签到";
+        msg = msg.replace("{checkin}", checkin);
+        console.log(checkin);
       }
     });
 
     await page.reload();
     await sleep(1000);
+
+    if (msg.includes("{point}")) {
+      await pushMsg("签到失败: 未获取到签到信息");
+    }
 
     await pushMsg(msg);
 
@@ -126,15 +149,12 @@ const main = async () => {
     errMsg = error.message;
     await pushMsg(`签到失败: ${errMsg}`);
   }
+  console.log("本轮签到结束");
 };
 
 const job = new CronJob(
   CRON || "0 0 8 * * *",
-  async () => {
-    console.log("开始签到");
-    await main();
-    console.log("签到结束");
-  },
+  main,
   null,
   true,
   "Asia/Shanghai"
