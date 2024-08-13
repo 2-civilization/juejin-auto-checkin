@@ -3,7 +3,8 @@
   "module": "index.ts",
   "type": "module",
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "@types/qrcode": "^1.5.5"
   },
   "peerDependencies": {
     "typescript": "^5.0.0"
@@ -11,6 +12,9 @@
   "dependencies": {
     "cron": "^3.1.7",
     "fs": "^0.0.1-security",
-    "puppeteer": "^23.0.2"
+    "jimp": "^0.22.12",
+    "jsqr": "^1.4.0",
+    "puppeteer": "^23.0.2",
+    "qrcode": "^1.5.4"
   }
 }

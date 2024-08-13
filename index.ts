@@ -1,11 +1,8 @@
 import puppeteer, { type CookieParam } from "puppeteer";
 import fs from "fs";
-import type {
-  PushPlusResponse,
-  UserCheckInStatus,
-  UserMonthlyActivity,
-} from "./types";
+import type { PushPlusResponse, UserCheckInStatus } from "./types";
 import { CronJob } from "cron";
+import { decodeQR, generateQRtoTerminal } from "./utils";
 
 const DIR_PATH = "./config";
 const COOKIE_PATH = DIR_PATH + "/cookies.json";
@@ -14,6 +11,8 @@ const QR_CODE_PATH = DIR_PATH + "/qrcode.png";
 let cookies: CookieParam[] = [];
 let msg = `今日签到状态：{checkin}, 获得矿石：{point}`;
 let errMsg = "";
+let checkin = "";
+let point = "-1";
 
 const PUSH_PLUS_TOKEN = process.env.PUSH_PLUS_TOKEN;
 const CRON = process.env.CRON;
@@ -41,9 +40,8 @@ const main = async () => {
   try {
     const browser = await puppeteer.launch({
       args: ["--no-sandbox"],
-      executablePath: fs.existsSync("/usr/bin/chromium")
-        ? "/usr/bin/chromium"
-        : undefined,
+      executablePath:
+        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
     });
 
     const page = await browser.newPage();
@@ -76,9 +74,11 @@ const main = async () => {
 
       console.log(`请扫描 ${QR_CODE_PATH} 中的二维码进行登录`);
 
+      const url = await decodeQR(QR_CODE_PATH);
+      console.log(generateQRtoTerminal(url));
+
       page.on("framenavigated", async (frame) => {
         if (frame === page.mainFrame()) {
-          console.log("页面已刷新");
           const cookies = await page.cookies();
           fs.writeFileSync(COOKIE_PATH, JSON.stringify(cookies, null, 2));
         }
@@ -95,36 +95,27 @@ const main = async () => {
 
     await page.setCookie(...cookies);
 
-    await page.goto("https://juejin.cn/user/center/signin?from=main_page");
+    await page.goto("https://juejin.cn/user/center/signin?from=main_page", {
+      waitUntil: "networkidle0",
+    });
 
     await page.waitForSelector(".signin");
-
     const checkinButton = await page.$(".code-calender");
     await checkinButton?.click();
 
+    await page.waitForSelector(".header-text > .figure-text");
+    const figureText = await page.$(".header-text > .figure-text");
+    point =
+      (await page.evaluate((el) => el && el.textContent, figureText)) || point;
+
     page.on("response", async (response) => {
       const url = response.url();
-      if (
-        url.includes("get_by_month") &&
-        response.request().method() === "GET"
-      ) {
-        const data = (await response.json()) as UserMonthlyActivity;
-        const today = data.data.find(
-          (item) =>
-            item.date ===
-            new Date(new Date().setHours(0, 0, 0, 0)).getTime() / 1000
-        );
-        if (today) {
-          msg = msg.replace("{point}", today.point.toString());
-        }
-      }
       if (
         url.includes("get_today_status") &&
         response.request().method() === "GET"
       ) {
         const data = (await response.json()) as UserCheckInStatus;
-        const checkin = data.data.check_in_done ? "已签到" : "未签到";
-        msg = msg.replace("{checkin}", checkin);
+        checkin = data.data.check_in_done ? "已签到" : "未签到";
         console.log(checkin);
       }
     });
@@ -133,11 +124,12 @@ const main = async () => {
       waitUntil: "networkidle0",
     });
 
-    if (msg.includes("{point}")) {
-      await pushMsg("未获取到矿石信息");
-      return;
+    if (!point) {
+      point = "-1";
     }
 
+    msg = msg.replace("{checkin}", checkin).replace("{point}", point);
+    console.log(msg);
     await pushMsg(msg);
 
     await browser.close();
@@ -146,6 +138,7 @@ const main = async () => {
     console.error(error);
     errMsg = error.message;
     await pushMsg(`签到失败: ${errMsg}`);
+    throw error;
   }
   console.log("本轮签到结束");
 };
