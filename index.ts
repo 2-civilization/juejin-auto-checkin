@@ -40,8 +40,9 @@ const main = async () => {
   try {
     const browser = await puppeteer.launch({
       args: ["--no-sandbox"],
-      executablePath:
-        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+      executablePath: fs.existsSync("/usr/bin/chromium")
+        ? "/usr/bin/chromium"
+        : undefined,
     });
 
     const page = await browser.newPage();
